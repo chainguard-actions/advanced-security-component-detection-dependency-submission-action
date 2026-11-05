@@ -1,0 +1,53 @@
+name: Test basic scan of npm fixture
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Clean previous artifacts
+        run: rm -f "$GITHUB_WORKSPACE/output.json" "$GITHUB_WORKSPACE/component-detection"
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          filePath: tests/fixtures/npm-project
+          detectorsCategories: Npm
+      - name: Assert outcome (submission to sentinel repo may fail)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ] && [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert component-detection binary was downloaded
+        run: |
+          ls -la "$GITHUB_WORKSPACE"
+          if [ ! -s "$GITHUB_WORKSPACE/component-detection" ]; then
+            echo "FAIL: component-detection binary missing or empty"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert scan output contains left-pad
+        run: |
+          f="$GITHUB_WORKSPACE/output.json"
+          if [ ! -f "$f" ]; then
+            echo "FAIL: output.json not produced"
+            exit 1
+          fi
+          head -c 3000 "$f"; echo
+          if ! grep -q '"componentsFound"' "$f"; then
+            echo "FAIL: output.json lacks componentsFound"
+            exit 1
+          fi
+          if ! grep -q 'left-pad' "$f"; then
+            echo "FAIL: left-pad not detected"
+            exit 1
+          fi
+          echo "PASS"

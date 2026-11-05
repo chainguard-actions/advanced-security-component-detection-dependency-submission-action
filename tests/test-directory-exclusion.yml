@@ -1,0 +1,46 @@
+name: Test directoryExclusionList
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Clean previous artifacts
+        run: rm -f "$GITHUB_WORKSPACE/output.json" "$GITHUB_WORKSPACE/component-detection"
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          filePath: tests/fixtures
+          detectorsCategories: Npm
+          directoryExclusionList: "**/excluded-project/**"
+      - name: Assert outcome (submission to sentinel repo may fail)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ] && [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert included project detected and excluded project skipped
+        run: |
+          f="$GITHUB_WORKSPACE/output.json"
+          if [ ! -f "$f" ]; then
+            echo "FAIL: output.json not produced"
+            exit 1
+          fi
+          head -c 3000 "$f"; echo
+          if ! grep -q 'left-pad' "$f"; then
+            echo "FAIL: left-pad (included project) not detected"
+            exit 1
+          fi
+          if grep -q 'is-number' "$f"; then
+            echo "FAIL: is-number from excluded directory was detected"
+            exit 1
+          fi
+          echo "PASS"
