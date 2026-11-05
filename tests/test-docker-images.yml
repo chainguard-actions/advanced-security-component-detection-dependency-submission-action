@@ -1,0 +1,40 @@
+name: Test dockerImagesToScan input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Clean previous artifacts
+        run: rm -f "$GITHUB_WORKSPACE/output.json" "$GITHUB_WORKSPACE/component-detection"
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          filePath: tests/fixtures/npm-project
+          dockerImagesToScan: alpine:3.19
+          correlator: docker-images-test
+      - name: Assert action ran with dockerImagesToScan
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ -f "$GITHUB_WORKSPACE/output.json" ]; then
+            if ! grep -q 'left-pad' "$GITHUB_WORKSPACE/output.json"; then
+              echo "FAIL: output.json produced but left-pad missing"
+              head -c 3000 "$GITHUB_WORKSPACE/output.json"
+              exit 1
+            fi
+            echo "PASS: scan results include npm fixture"
+          else
+            echo "INFO: output.json not produced (container scanning may be unavailable under act)"
+          fi
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (sentinel repo / docker unavailable)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

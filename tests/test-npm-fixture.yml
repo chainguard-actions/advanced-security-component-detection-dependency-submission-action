@@ -1,0 +1,40 @@
+name: Test scanning an npm fixture project
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Clean previous artifacts
+        run: rm -f "$GITHUB_WORKSPACE/output.json" "$GITHUB_WORKSPACE/component-detection"
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          filePath: tests/fixtures/npm-project
+          detectorsCategories: Npm
+          correlator: npm-fixture-test
+      - name: Assert left-pad detected
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ ! -f "$GITHUB_WORKSPACE/output.json" ]; then
+            echo "FAIL: output.json was not produced"
+            exit 1
+          fi
+          if ! grep -q 'left-pad' "$GITHUB_WORKSPACE/output.json"; then
+            echo "FAIL: left-pad not found in scan results"
+            head -c 3000 "$GITHUB_WORKSPACE/output.json"
+            exit 1
+          fi
+          echo "PASS: left-pad detected"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: snapshot submitted"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: submission failed gracefully (sentinel repo is not resolvable)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
