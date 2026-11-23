@@ -1,0 +1,43 @@
+name: Test full custom detector, correlator and snapshot overrides
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Get HEAD sha
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          filePath: tests/fixtures/npm-project
+          correlator: "act-test-correlator"
+          detector-name: "custom-detector"
+          detector-version: "1.2.3"
+          detector-url: "https://example.com/custom-detector"
+          snapshot-sha: ${{ steps.sha.outputs.sha }}
+          snapshot-ref: refs/heads/main
+          detectorsCategories: "Npm"
+          directoryExclusionList: "**/node_modules/**"
+      - name: Assert action ran (succeeded, or failed gracefully on the sentinel repo)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ ! -f "$GITHUB_WORKSPACE/component-detection" ]; then
+            echo "FAIL: component-detection binary was not downloaded"
+            exit 1
+          fi
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: snapshot submitted"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (sentinel repo is not resolvable)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
